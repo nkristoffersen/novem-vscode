@@ -1,4 +1,10 @@
 import { UserProfile } from './config';
+import {
+    UserProfileSchema,
+    CodeRootResponseSchema,
+    VisListResponseSchema,
+    warnOnMismatch,
+} from './novem-api.schema';
 
 // Maps each visType to its API path prefix.
 // Add new types here to extend support without touching call sites.
@@ -121,7 +127,9 @@ export default class NovemApi {
     }
 
     async getProfile() {
-        return await this.get<UserProfile>(`${this.apiRoot}/admin/profile/overview`);
+        const data = await this.get<UserProfile>(`${this.apiRoot}/admin/profile/overview`);
+        warnOnMismatch(UserProfileSchema, data, 'getProfile');
+        return data;
     }
 
     async getApiRoot() {
@@ -129,15 +137,21 @@ export default class NovemApi {
     }
 
     async getCodeRoot() {
-        return await this.get(`${this.apiRoot}/code`);
+        const data = await this.get(`${this.apiRoot}/code`);
+        warnOnMismatch(CodeRootResponseSchema, data, 'getCodeRoot');
+        return data;
     }
 
     async getMailsForUser(user: string) {
-        return await this.get(`${this.apiRoot}/u/${user}/m`);
+        const data = await this.get(`${this.apiRoot}/u/${user}/m`);
+        warnOnMismatch(VisListResponseSchema, data, 'getMailsForUser');
+        return data;
     }
 
     async getPlotsForUser(user: string) {
-        return await this.get(`${this.apiRoot}/u/${user}/p`);
+        const data = await this.get(`${this.apiRoot}/u/${user}/p`);
+        warnOnMismatch(VisListResponseSchema, data, 'getPlotsForUser');
+        return data;
     }
 
     async getJobsForUser(user: string) {

@@ -2,6 +2,13 @@ import * as vscode from 'vscode';
 
 import { UserConfig, UserProfile, typeToIcon, getActiveProfile } from './config';
 import NovemApi from './novem-api';
+import {
+    VisType,
+    TreeRootItem,
+    TreeChildItem,
+    parseTreeRootItems,
+    parseTreeChildItems,
+} from './tree.schema';
 
 // Base class for all Novem tree providers
 export abstract class BaseNovemProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
@@ -50,9 +57,9 @@ export abstract class BaseNovemProvider implements vscode.TreeDataProvider<vscod
     }
 
     // Abstract methods that subclasses must implement
-    abstract getType(): 'plots' | 'mails' | 'jobs' | 'repos';
-    abstract getRootItems(username: string): Promise<any[]>;
-    abstract getChildItems(visId: string, path?: string): Promise<any[]>;
+    abstract getType(): VisType;
+    abstract getRootItems(username: string): Promise<TreeRootItem[]>;
+    abstract getChildItems(visId: string, path?: string): Promise<TreeChildItem[]>;
 
     private static readonly CREATE_COMMANDS: Record<string, { command: string; label: string }> = {
         plots: { command: 'novem.createNovemPlot', label: 'Create New Plot...' },
@@ -86,22 +93,19 @@ export abstract class BaseNovemProvider implements vscode.TreeDataProvider<vscod
                     items.push(statusItem);
                 }
 
-                const rootItems = (Array.isArray(response) ? response : [])
-                    .sort((a: any, b: any) => {
-                        const aId = a.id || a.name;
-                        const bId = b.id || b.name;
-                        return aId.localeCompare(bId);
-                    })
+                const rootItems = response
+                    .slice()
+                    .sort((a, b) => a.id.localeCompare(b.id))
                     .map(
-                        (each: any) =>
+                        each =>
                             new MyTreeItem(
                                 this,
-                                each.id || each.name,
+                                each.id,
                                 'dir',
-                                each.permissions || ['r', 'w', 'd'],
+                                each.permissions ?? ['r', 'w', 'd'],
                                 this.getType(),
                                 '',
-                                each.type || (this.getType() === 'jobs' ? 'job' : 'repo'),
+                                each.type ?? (this.getType() === 'jobs' ? 'job' : 'repo'),
                             ),
                     );
 
@@ -143,8 +147,8 @@ export abstract class BaseNovemProvider implements vscode.TreeDataProvider<vscod
                 const response = await this.getChildItems(visId, path);
 
                 return response
-                    .filter((each: any) => ['file', 'dir', 'link'].includes(each.type))
-                    .sort((a: any, b: any) => {
+                    .slice()
+                    .sort((a, b) => {
                         const aIsDir = a.type === 'dir';
                         const bIsDir = b.type === 'dir';
 
@@ -154,7 +158,7 @@ export abstract class BaseNovemProvider implements vscode.TreeDataProvider<vscod
                         return a.name.localeCompare(b.name);
                     })
                     .map(
-                        (each: any) =>
+                        each =>
                             new MyTreeItem(
                                 this,
                                 each.name,
@@ -173,22 +177,20 @@ export abstract class BaseNovemProvider implements vscode.TreeDataProvider<vscod
     }
 }
 
-type VisType = 'plots' | 'mails' | 'jobs' | 'repos';
-
 function makeProvider(
     type: VisType,
-    getRootFn: (api: NovemApi, username: string) => Promise<any[]>,
-    getChildFn: (api: NovemApi, id: string, path?: string) => Promise<any[]>,
+    getRootFn: (api: NovemApi, username: string) => Promise<unknown>,
+    getChildFn: (api: NovemApi, id: string, path?: string) => Promise<unknown>,
 ) {
     return class extends BaseNovemProvider {
         getType() {
             return type;
         }
-        async getRootItems(username: string) {
-            return getRootFn(this.api, username);
+        async getRootItems(username: string): Promise<TreeRootItem[]> {
+            return parseTreeRootItems(await getRootFn(this.api, username));
         }
-        async getChildItems(id: string, path?: string) {
-            return getChildFn(this.api, id, path);
+        async getChildItems(id: string, path?: string): Promise<TreeChildItem[]> {
+            return parseTreeChildItems(await getChildFn(this.api, id, path));
         }
     };
 }
